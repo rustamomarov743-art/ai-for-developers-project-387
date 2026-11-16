@@ -1,0 +1,52 @@
+# Календарь звонков
+
+Учебный проект Хекслета: сервис бронирования встреч.
+Требования и целевой сценарий описаны в `README.md`.
+
+## Структура
+
+- `api/` — TypeSpec-контракт и сгенерированная OpenAPI-схема.
+- `backend/` — Spring Boot, REST API и backend-тесты.
+- `frontend/` — React, TypeScript и Vite.
+- `mise.toml` — версии инструментов и команды проекта.
+
+Корневой Maven-проект не запускает проверки frontend:
+для полной проверки используйте `mise run check`, а не только `mvn verify`.
+
+## Команды
+
+Запускать из корня репозитория:
+
+- `mise run api-generate` — генерация OpenAPI и клиентского SDK.
+- `mise run backend` — запуск backend на порту 8080.
+- `mise run frontend` — установка зависимостей и запуск frontend.
+- `mise run docker` — сборка Docker-образа и запуск приложения на `$PORT` (по умолчанию 8080).
+- `mise run check` — все проверки; обязательна перед завершением изменений.
+- `mise run backend-format` — форматирование Java через Spotless.
+
+CI запускает `mise run check`. После изменений API дополнительно
+проверяйте реальный HTTP-сценарий.
+
+## Правила
+
+- Сообщения коммитов оформляйте по [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/): `<тип>(<необязательная область>): <краткое описание>`.
+- Указывай в коммите тикет, к которому он относится
+- Используйте `feat` для новой функциональности и `fix` для исправления ошибок; ломающие изменения помечайте `!` после типа или области.
+- Не отключайте проверки ради зелёного прогона.
+- Не редактируйте вручную `frontend/src/api/generated/`:
+  меняйте контракт и повторно запускайте генерацию.
+- Не изменяйте `.github/workflows/hexlet-check.yml`.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs are tracked in GitHub Issues. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the five default triage labels. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Use the single-context layout. See `docs/agents/domain.md`.

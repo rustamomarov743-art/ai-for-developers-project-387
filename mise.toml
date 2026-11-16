@@ -1,0 +1,24 @@
+[tools]
+java = "25.0.5+8.0.LTS" # backend/pom.xml: <java.version>25</java.version>
+node = "24.22.2"        # LTS, соответствует @types/node ^24 в frontend
+maven = "3.10.0"        # Maven для backend
+
+[env]
+# mise автоматически выставляет JAVA_HOME и PATH для инструментов из [tools].
+# Переменные проекта добавляйте ниже, либо в корневой .env (mise подхватит его,
+# если раскомментировать строку):
+# _.file = ".env"
+
+[tasks]
+api-install = { description = "Установка зависимостей генераторов API", run = "npm --prefix api ci" }
+api-generate = { description = "Генерация OpenAPI и клиентского SDK", depends = ["api-install"], run = "npm --prefix api run generate" }
+backend = { description = "Запуск Spring Boot (порт 8080)", run = "mvn -f backend/pom.xml spring-boot:run" }
+backend-check = { description = "Проверки и тесты backend", run = "mvn -f backend/pom.xml verify" }
+backend-format = { description = "Форматирование Java через Spotless", run = "mvn -f backend/pom.xml spotless:apply" }
+frontend-install = { description = "Установка зависимостей frontend", run = "npm --prefix frontend ci" }
+frontend = { description = "Запуск Vite", depends = ["frontend-install"], run = "npm --prefix frontend run dev" }
+frontend-check = { description = "Линтер, тесты, типы и сборка frontend", depends = ["frontend-install"], run = ["npm --prefix frontend run lint", "npm --prefix frontend test", "npm --prefix frontend run build"] }
+docker-build = { description = "Сборка Docker-образа приложения", run = "docker build -t calendar-app ." }
+docker = { description = "Сборка и запуск приложения в Docker", depends = ["docker-build"], run = "docker run --rm -p ${PORT:-8080}:${PORT:-8080} -e PORT=${PORT:-8080} calendar-app" }
+check = { description = "Все проверки проекта", depends = ["backend-check", "frontend-check"] }
+clean = { description = "Очистка артефактов сборки и зависимостей Node.js", run = ["mvn -f pom.xml clean", "rm -rf api/node_modules frontend/dist frontend/node_modules"] }
