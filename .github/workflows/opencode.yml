@@ -1,4 +1,5 @@
 name: opencode
+run-name: opencode ${{ github.event.issue.pull_request && 'PR' || github.event.pull_request && 'PR' || 'issue' }} #${{ github.event.issue.number || github.event.pull_request.number }}
 
 on:
   issue_comment:
@@ -24,14 +25,39 @@ jobs:
       id-token: write
       contents: read
       issues: write
+      actions: read
+    env:
+      PR_NUMBER: ${{ github.event.issue.pull_request && github.event.issue.number || github.event.pull_request.number || '' }}
     steps:
       - name: Checkout repository
+        id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
           persist-credentials: false
 
+      - name: Check PR model budget
+        id: budget
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
+          CURRENT_RUN_ID: ${{ github.run_id }}
+          CURRENT_ATTEMPT: ${{ github.run_attempt }}
+          WORKFLOW_ID: opencode.yml
+          PR_MODEL_LIMIT: 3
+        run: |
+          date +%s > .opencode-started-at
+          if [[ -z "${KIMI_API_KEY:-}" ]]; then
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+            echo "reason=infra" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          bash .github/scripts/check-pr-budget.sh
+
       - name: Run OpenCode
+        id: opencode
+        if: steps.budget.outputs.allowed == 'true'
+        timeout-minutes: 12
         uses: anomalyco/opencode/github@latest
         env:
           KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
@@ -40,3 +66,44 @@ jobs:
           model: kimi-code-plan-global/k3-256k
           mentions: /opencode,/oc
           share: false
+
+      - name: Report terminal state
+        if: |
+          always() && env.PR_NUMBER != '' &&
+          (steps.checkout.outcome == 'failure' ||
+           steps.budget.outcome == 'failure' ||
+           steps.budget.outputs.reason != '' ||
+           steps.opencode.outcome == 'failure')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REASON: ${{ steps.budget.outputs.reason }}
+          COUNT: ${{ steps.budget.outputs.count }}
+          LIMIT: ${{ steps.budget.outputs.limit }}
+          CHECKOUT_OUTCOME: ${{ steps.checkout.outcome }}
+          BUDGET_OUTCOME: ${{ steps.budget.outcome }}
+          OPENCODE_OUTCOME: ${{ steps.opencode.outcome }}
+        run: |
+          reason="$REASON"
+          if [[ "$CHECKOUT_OUTCOME" == "failure" || "$BUDGET_OUTCOME" == "failure" ]]; then
+            reason="infra"
+          elif [[ "$OPENCODE_OUTCOME" == "failure" && -z "$reason" ]]; then
+            elapsed=0
+            if [[ -f .opencode-started-at ]]; then
+              elapsed=$(( $(date +%s) - $(cat .opencode-started-at) ))
+            fi
+            if [[ "$elapsed" -ge 690 ]]; then
+              reason="timeout"
+            else
+              reason="agent_failed"
+            fi
+          fi
+          [[ -n "$reason" ]] || exit 0
+
+          head_sha="$HEAD_SHA"
+          if [[ -z "$head_sha" ]]; then
+            head_sha="$(gh api "repos/{owner}/{repo}/pulls/$PR_NUMBER" --jq .head.sha)"
+          fi
+          gh pr comment "$PR_NUMBER" --body "$(printf '> OpenCode остановлен\n>\n> Причина: `%s`\n> Использовано попыток: `%s/%s`\n> Head SHA: `%s`\n> Статус: нужен человек\n> [Лог запуска](%s/%s/actions/runs/%s)' \
+            "$reason" "${COUNT:-unknown}" "${LIMIT:-3}" "$head_sha" \
+            "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")"
