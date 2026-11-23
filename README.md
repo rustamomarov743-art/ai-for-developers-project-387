@@ -33,7 +33,7 @@ cd ai-for-developers-project-387
 
 Воркфлоу `.github/workflows/opencode.yml` запускает OpenCode по новым комментариям (`created`) к issue, pull request и строкам diff. Команды вызова — `/opencode` и `/oc`; запуск доступен только авторам с ролью `OWNER`, `MEMBER` или `COLLABORATOR`, комментарии ботов игнорируются.
 
-Используется модель `kimi-code-plan-global/k3-256k` подписки Kimi For Coding. Для работы необходимо установить [OpenCode App](https://github.com/apps/opencode-agent) на репозиторий и сохранить ключ международного региона `kimi.ai` в Actions Secrets под именем `KIMI_API_KEY`. Агент авторизуется через GitHub App и OIDC; публикация сессий отключена (`share: false`).
+Используется модель `kimi-code-plan-global/k3-256k` подписки Kimi For Coding. Для работы необходимо установить [OpenCode App](https://github.com/apps/opencode-agent) на репозиторий и сохранить ключ международного региона `kimi.ai` в Actions Secrets под именем `KIMI_API_KEY`. Агент авторизуется через GitHub App и OIDC; публикация сессий отключена (`share: false`). Для команд `gh` внутри агента используется автоматически выдаваемый GitHub `GITHUB_TOKEN` с правом `issues: write`, передаваемый через переменную `GH_TOKEN`; отдельный секрет для него не нужен.
 
 Время выполнения ограничено 15 минутами. Запуски в рамках одного issue или pull request выполняются последовательно: новая команда отменяет предыдущий запуск. Ответ агента появляется в обсуждении issue или pull request, а журнал — на вкладке [Actions](https://github.com/rustamomarov743-art/ai-for-developers-project-387/actions).
 
