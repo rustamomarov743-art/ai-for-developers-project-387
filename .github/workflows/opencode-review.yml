@@ -1,0 +1,104 @@
+name: opencode-review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+jobs:
+  review:
+    if: |
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (github.event.pull_request.author_association == 'OWNER' ||
+       github.event.pull_request.author_association == 'MEMBER' ||
+       github.event.pull_request.author_association == 'COLLABORATOR' ||
+       github.event.pull_request.user.login == 'opencode-agent' ||
+       github.event.pull_request.user.login == 'opencode-agent[bot]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: opencode-review-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      issues: read
+      actions: read
+      checks: read
+      statuses: read
+      pull-requests: write
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
+        with:
+          version: 2026.11.3
+
+      - name: Collect review context
+        id: context
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: bash .github/scripts/collect-review-context.sh
+
+      - name: Install OpenCode CLI
+        id: install
+        run: npm install --global @opencode/cli@2.4.1
+
+      - name: Run independent review
+        id: review
+        timeout-minutes: 12
+        env:
+          KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
+          OPENCODE_CONFIG: ${{ github.workspace }}/.github/opencode/review.jsonc
+        run: |
+          if [[ -z "${KIMI_API_KEY:-}" ]]; then
+            echo "reason=infra" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          set +e
+          timeout --signal=TERM 10m opencode run --standalone --archived \
+            --model kimi-code-plan-global/k3-256k \
+            "$(cat .review-context/prompt.txt)" \
+            > .review-context/review.md
+          status=$?
+          set -e
+
+          if [[ $status -eq 124 ]]; then
+            echo "reason=timeout" >> "$GITHUB_OUTPUT"
+          elif [[ $status -ne 0 ]]; then
+            echo "reason=agent_failed" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish review
+        if: steps.review.outcome == 'success' && steps.review.outputs.reason == ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          {
+            printf '> Независимое авторевью OpenCode\n>\n> Head SHA: `%s`\n> [Лог запуска](%s/%s/actions/runs/%s)\n\n' \
+              "$HEAD_SHA" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID"
+            cat .review-context/review.md
+          } > .review-context/published.md
+          gh pr comment "$PR_NUMBER" --body-file .review-context/published.md
+
+      - name: Report review failure
+        if: always() && (steps.context.outcome == 'failure' || steps.install.outcome == 'failure' || steps.review.outcome == 'failure' || steps.review.outputs.reason != '')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REASON: ${{ steps.review.outputs.reason }}
+        run: |
+          reason="${REASON:-infra}"
+          if [[ "${{ steps.review.outcome }}" == "failure" && -z "$REASON" ]]; then
+            reason="agent_failed"
+          fi
+          gh pr comment "$PR_NUMBER" --body "$(printf '> Авторевью не завершено\n>\n> Причина: `%s`\n> Head SHA: `%s`\n> Статус: нужен человек\n> [Лог запуска](%s/%s/actions/runs/%s)' \
+            "$reason" "$HEAD_SHA" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")"

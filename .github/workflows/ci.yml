@@ -16,3 +16,82 @@ jobs:
         with:
           version: 2026.11.3
       - run: mise run check
+
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify checked out SHA
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          actual_sha="$(git rev-parse HEAD)"
+          {
+            echo "expected_sha=$EXPECTED_SHA"
+            echo "actual_sha=$actual_sha"
+          } | tee browser-verification.txt
+          test "$actual_sha" = "$EXPECTED_SHA"
+
+      - uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
+        with:
+          version: 2026.11.3
+
+      - name: Build application image
+        run: docker build --tag calendar-app-pr .
+
+      - name: Start application
+        run: docker run --detach --name calendar-app-pr --publish 8080:8080 calendar-app-pr
+
+      - name: Wait for application health
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:8080/api/health; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs calendar-app-pr
+          exit 1
+
+      - name: Install browser dependencies
+        run: |
+          npm --prefix frontend ci
+          cd frontend
+          npx playwright install --with-deps chromium
+
+      - name: Run browser scenarios
+        run: npm --prefix frontend run test:e2e
+
+      - name: Record browser verification
+        if: always()
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          {
+            echo "result=${{ job.status }}"
+            echo "run_url=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo "actual_sha=$(git rev-parse HEAD)"
+            test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          } | tee --append browser-verification.txt
+
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: browser-pr-${{ github.event.pull_request.number || 'push' }}-sha-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            browser-verification.txt
+            frontend/playwright-report/
+            frontend/test-results/
+          if-no-files-found: warn
+
+      - name: Stop application
+        if: always()
+        run: docker rm --force calendar-app-pr

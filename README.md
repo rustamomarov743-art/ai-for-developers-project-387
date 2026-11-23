@@ -33,9 +33,27 @@ cd ai-for-developers-project-387
 
 Воркфлоу `.github/workflows/opencode.yml` запускает OpenCode по новым комментариям (`created`) к issue, pull request и строкам diff. Команды вызова — `/opencode` и `/oc`; запуск доступен только авторам с ролью `OWNER`, `MEMBER` или `COLLABORATOR`, комментарии ботов игнорируются.
 
-Используется модель `kimi-code-plan-global/k3-256k` подписки Kimi For Coding. Для работы необходимо установить [OpenCode App](https://github.com/apps/opencode-agent) на репозиторий и сохранить ключ международного региона `kimi.ai` в Actions Secrets под именем `KIMI_API_KEY`. Агент авторизуется через GitHub App и OIDC; публикация сессий отключена (`share: false`). Для команд `gh` внутри агента используется автоматически выдаваемый GitHub `GITHUB_TOKEN` с правом `issues: write`, передаваемый через переменную `GH_TOKEN`; отдельный секрет для него не нужен.
+Используется модель `kimi-code-plan-global/k3-256k` подписки Kimi For Coding. Для работы необходимо установить [OpenCode App](https://github.com/apps/opencode-agent) на репозиторий и сохранить ключ международного региона `kimi.ai` в Actions Secrets под именем `KIMI_API_KEY`. Агент авторизуется через GitHub App и OIDC; публикация сессий отключена (`share: false`). Для команд `gh` внутри агента используется автоматически выдаваемый GitHub `GITHUB_TOKEN` с правами `issues: write` и `actions: read`, передаваемый через переменную `GH_TOKEN`; отдельный секрет для него не нужен.
 
 Время выполнения ограничено 15 минутами. Запуски в рамках одного issue или pull request выполняются последовательно: новая команда отменяет предыдущий запуск. Ответ агента появляется в обсуждении issue или pull request, а журнал — на вкладке [Actions](https://github.com/rustamomarov743-art/ai-for-developers-project-387/actions).
+
+Для каждого PR разрешены три обращения человека к модели. Перед запуском OpenCode workflow подсчитывает по истории Actions attempts, в которых модель уже вызывалась; отмена, тайм-аут и Re-run также расходуют попытку. Четвёртая команда `/oc` завершается без вызова модели комментарием `limit_exhausted` с head SHA и ссылкой на лог. Ошибки подготовки получают причину `infra`, тайм-аут — `timeout`, прочий сбой агента — `agent_failed`. Новый PR получает новый бюджет; комментарий с отчётом на него не влияет.
+
+### Независимое авторевью PR
+
+Воркфлоу `.github/workflows/opencode-review.yml` запускается на `pull_request` (`opened`, `synchronize`, `reopened`, `ready_for_review`) и использует обычный OpenCode CLI, а не продолжение сессии реализации. Он читает diff, спецификацию и тикеты по ссылкам из PR, человеческое согласование, критерии `REVIEW.md`, предыдущие замечания и доступные результаты CI. Модель работает read-only и не получает GitHub-токен; текст ревью публикует отдельный шаг через `gh pr comment`.
+
+Запуск разрешён только для веток этого репозитория и доверенных авторов, включая OpenCode App. Fork PR пропускаются до выдачи секрета; `pull_request_target` не используется. Job ограничен 20 минутами, а `concurrency` отменяет устаревшее ревью того же PR после нового push. Замечания авторевью не запускают исправления: решение и команда `/oc` остаются за человеком.
+
+### Браузерная проверка PR
+
+Job `browser` в `.github/workflows/ci.yml` проверяет точный `github.event.pull_request.head.sha`, записывает результат `git rev-parse HEAD`, собирает Docker-образ и запускает Playwright. Артефакт `browser-pr-<номер>-sha-<SHA>` содержит результат, сценарии, HTML report, trace и скриншоты, включая успешный прогон. После нового push нужно открыть новый артефакт и сверить его SHA с текущим head PR; старый артефакт относится к прежней версии.
+
+Перед merge в `main` должны быть успешны обязательные проверки `check` и `browser`. Их настройка выполняется владельцем в branch protection после первого появления check names. Решение о merge остаётся за человеком.
+
+### Release Please
+
+После merge в `main` `.github/workflows/release-please.yml` создаёт или обновляет release-PR с changelog и версией на основе Conventional Commits. Конфигурация использует `release-type: simple`, `version.txt` и не переписывает старую историю. В **Settings → Actions → General → Workflow permissions** владелец включает **Allow GitHub Actions to create and approve pull requests**. Если создание release-PR ранее упало из-за этой настройки, после её включения нужно повторить failed run. Проверки release-PR могут ожидать ручного подтверждения Actions; merge release-PR и выпуск приложения выполняются отдельно человеком.
 
 ### Автотриаж issues
 

@@ -1,0 +1,12 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bootstrap-sha": "4c4a397491dfc56fd0f942a423796e608aa99a4d",
+  "packages": {
+    ".": {
+      "package-name": "calendar-app",
+      "release-type": "simple",
+      "version-file": "version.txt",
+      "changelog-path": "CHANGELOG.md"
+    }
+  }
+}
