@@ -15,6 +15,10 @@ fi
 
 run_title="opencode PR #$PR_NUMBER"
 count=0
+runs="$(
+  gh api --paginate "repos/{owner}/{repo}/actions/workflows/$WORKFLOW_ID/runs?per_page=100" \
+    --jq ".workflow_runs[] | select(.display_title == \"$run_title\") | [.id, .run_attempt] | @tsv"
+)"
 
 while read -r run_id run_attempts; do
   [[ -n "$run_id" ]] || continue
@@ -31,10 +35,7 @@ while read -r run_id run_attempts; do
       count=$((count + 1))
     fi
   done
-done < <(
-  gh api --paginate "repos/{owner}/{repo}/actions/workflows/$WORKFLOW_ID/runs?per_page=100" \
-    --jq ".workflow_runs[] | select(.display_title == \"$run_title\") | [.id, .run_attempt] | @tsv"
-)
+done <<< "$runs"
 
 echo "count=$count" >> "$GITHUB_OUTPUT"
 echo "limit=$limit" >> "$GITHUB_OUTPUT"
