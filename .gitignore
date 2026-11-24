@@ -125,3 +125,6 @@ node_modules/
 
 .my/log
 .my
+
+# Служебный маркер budget-шага агента
+.opencode-started-at
