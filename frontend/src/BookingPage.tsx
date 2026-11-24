@@ -35,6 +35,12 @@ function formatDate(date: string) {
 
 type BookingStep = 'type' | 'slot' | 'details' | 'confirmation'
 
+type GuestFieldErrors = {
+  guestName?: string
+  guestEmail?: string
+  note?: string
+}
+
 const bookingSteps: Array<{ id: BookingStep; label: string }> = [
   { id: 'type', label: 'Тип встречи' },
   { id: 'slot', label: 'Дата и время' },
@@ -112,11 +118,7 @@ function BookingPage() {
   const [submitting, setSubmitting] = useState(false)
   const [bookingError, setBookingError] = useState<string | null>(null)
   const [conflictMessage, setConflictMessage] = useState<string | null>(null)
-  const [fieldErrors, setFieldErrors] = useState<{
-    guestName?: string
-    guestEmail?: string
-    note?: string
-  }>({})
+  const [fieldErrors, setFieldErrors] = useState<GuestFieldErrors>({})
   const [bookedMeeting, setBookedMeeting] = useState<Meeting | null>(null)
   const [bookedDate, setBookedDate] = useState<string | null>(null)
 
@@ -225,7 +227,7 @@ function BookingPage() {
     const trimmedName = guestName.trim()
     const trimmedEmail = guestEmail.trim()
     const trimmedNote = note.trim()
-    const errors: { guestName?: string; guestEmail?: string; note?: string } = {}
+    const errors: GuestFieldErrors = {}
     if (!trimmedName) {
       errors.guestName = 'Имя обязательно'
     } else if (trimmedName.length > 100) {
@@ -269,7 +271,7 @@ function BookingPage() {
         setBookedMeeting(data)
         setBookedDate(selectedDate)
       } else if (response.status === 400 && error?.code === 'VALIDATION_ERROR') {
-        const serverErrors: { guestName?: string; guestEmail?: string; note?: string } = {}
+        const serverErrors: GuestFieldErrors = {}
         for (const fieldError of error.errors ?? []) {
           if (fieldError.path === 'guestName') serverErrors.guestName = fieldError.message
           if (fieldError.path === 'guestEmail') serverErrors.guestEmail = fieldError.message
