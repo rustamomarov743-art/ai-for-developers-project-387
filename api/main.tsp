@@ -199,6 +199,9 @@ model Meeting {
   createdAt: utcDateTime;
   status: MeetingStatus;
   meetingType: MeetingType;
+
+  @maxLength(500)
+  note?: string;
 }
 
 model OwnerMeeting {
@@ -236,6 +239,9 @@ model CreateBookingRequest {
   @minLength(1)
   @maxLength(254)
   guestEmail: string;
+
+  @maxLength(500)
+  note?: string;
 }
 
 model CreateBookingResponse {

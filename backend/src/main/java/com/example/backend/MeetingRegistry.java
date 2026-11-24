@@ -15,7 +15,8 @@ class MeetingRegistry {
     this.clock = clock;
   }
 
-  Meeting book(MeetingType meetingType, BookingSlot slot, String guestName, String guestEmail) {
+  Meeting book(
+      MeetingType meetingType, BookingSlot slot, String guestName, String guestEmail, String note) {
     var meeting =
         new Meeting(
             UUID.randomUUID().toString(),
@@ -26,7 +27,8 @@ class MeetingRegistry {
             guestEmail,
             clock.instant(),
             MeetingStatus.SCHEDULED,
-            meetingType);
+            meetingType,
+            note);
     meetings.add(meeting);
     return meeting;
   }
@@ -75,7 +77,8 @@ class MeetingRegistry {
               meeting.guestEmail(),
               meeting.createdAt(),
               MeetingStatus.CANCELLED,
-              meeting.meetingType());
+              meeting.meetingType(),
+              meeting.note());
       meetings.set(index, cancelled);
       return cancelled;
     }
