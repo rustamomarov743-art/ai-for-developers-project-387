@@ -17,7 +17,7 @@ jobs:
        github.event.comment.author_association == 'MEMBER' ||
        github.event.comment.author_association == 'COLLABORATOR')
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 65
     concurrency:
       group: opencode-${{ github.event.issue.number || github.event.pull_request.number }}
       cancel-in-progress: true
@@ -57,7 +57,7 @@ jobs:
       - name: Run OpenCode
         id: opencode
         if: steps.budget.outputs.allowed == 'true'
-        timeout-minutes: 12
+        timeout-minutes: 60
         uses: anomalyco/opencode/github@latest
         env:
           KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
@@ -92,7 +92,7 @@ jobs:
             if [[ -f .opencode-started-at ]]; then
               elapsed=$(( $(date +%s) - $(cat .opencode-started-at) ))
             fi
-            if [[ "$elapsed" -ge 690 ]]; then
+            if [[ "$elapsed" -ge 3570 ]]; then
               reason="timeout"
             else
               reason="agent_failed"
