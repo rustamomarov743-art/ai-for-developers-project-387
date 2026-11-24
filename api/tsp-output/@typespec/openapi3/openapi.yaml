@@ -412,6 +412,9 @@ components:
           type: string
           minLength: 1
           maxLength: 254
+        note:
+          type: string
+          maxLength: 500
     CreateMeetingTypeRequest:
       type: object
       required:
@@ -473,6 +476,9 @@ components:
           $ref: '#/components/schemas/MeetingStatus'
         meetingType:
           $ref: '#/components/schemas/MeetingType'
+        note:
+          type: string
+          maxLength: 500
     MeetingStatus:
       type: string
       enum:
@@ -540,6 +546,9 @@ components:
           format: int32
         inProgress:
           type: boolean
+        note:
+          type: string
+          maxLength: 500
     ProblemDetails:
       type: object
       required:

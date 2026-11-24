@@ -26,14 +26,16 @@ class BookingService {
             .findAvailableSlotInAnyGuestWindow(
                 meetingType, availability.current(), validated.startsAt(), meetings.busyIntervals())
             .orElseThrow(SlotUnavailableException::new);
-    return meetings.book(meetingType, slot, validated.guestName(), validated.guestEmail());
+    return meetings.book(
+        meetingType, slot, validated.guestName(), validated.guestEmail(), validated.note());
   }
 
   private static ValidatedBooking validate(CreateBookingRequest request) {
     if ((isPresent(request.meetingTypeId()) && !request.meetingTypeId().isTextual())
         || (isPresent(request.startsAt()) && !request.startsAt().isTextual())
         || (isPresent(request.guestName()) && !request.guestName().isTextual())
-        || (isPresent(request.guestEmail()) && !request.guestEmail().isTextual())) {
+        || (isPresent(request.guestEmail()) && !request.guestEmail().isTextual())
+        || (isPresent(request.note()) && !request.note().isTextual())) {
       throw new MalformedRequestException();
     }
     var errors = new ArrayList<ApiFieldError>();
@@ -63,10 +65,15 @@ class BookingService {
     } else if (!isValidEmail(guestEmail)) {
       errors.add(new ApiFieldError("guestEmail", "Укажите корректный email"));
     }
+    var note = isPresent(request.note()) ? request.note().textValue().trim() : "";
+    if (note.length() > 500) {
+      errors.add(new ApiFieldError("note", "Заметка должна содержать не более 500 символов"));
+    }
     if (!errors.isEmpty()) {
       throw new RequestValidationException(errors);
     }
-    return new ValidatedBooking(meetingTypeId, startsAt, guestName, guestEmail);
+    return new ValidatedBooking(
+        meetingTypeId, startsAt, guestName, guestEmail, note.isEmpty() ? null : note);
   }
 
   private static boolean isValidEmail(String email) {
@@ -78,5 +85,5 @@ class BookingService {
   }
 
   private record ValidatedBooking(
-      String meetingTypeId, Instant startsAt, String guestName, String guestEmail) {}
+      String meetingTypeId, Instant startsAt, String guestName, String guestEmail, String note) {}
 }

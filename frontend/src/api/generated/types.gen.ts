@@ -54,6 +54,7 @@ export type CreateBookingRequest = {
     startsAt: string;
     guestName: string;
     guestEmail: string;
+    note?: string;
 };
 
 export type CreateMeetingTypeRequest = {
@@ -76,6 +77,7 @@ export type Meeting = {
     createdAt: string;
     status: MeetingStatus;
     meetingType: MeetingType;
+    note?: string;
 };
 
 export type MeetingStatus = 'SCHEDULED' | 'CANCELLED';
@@ -100,6 +102,7 @@ export type OwnerMeeting = {
     meetingType: MeetingType;
     durationMinutes: number;
     inProgress: boolean;
+    note?: string;
 };
 
 export type ProblemDetails = {

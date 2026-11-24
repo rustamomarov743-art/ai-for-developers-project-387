@@ -49,6 +49,88 @@ class BookingApiTests extends CalendarApiTestBase {
   }
 
   @Test
+  void createsBookingWithTrimmedNoteAndKeepsConflictAndPrivacyRules() throws Exception {
+    var meetingType = createMeetingType("Встреча с заметкой", 45);
+    putAvailability(
+        "{\"MONDAY\":[{\"start\":\"09:00\",\"end\":\"12:00\"}],"
+            + "\"TUESDAY\":[],\"WEDNESDAY\":[],\"THURSDAY\":[],\"FRIDAY\":[],"
+            + "\"SATURDAY\":[],\"SUNDAY\":[]}");
+
+    var response =
+        postBooking(
+            "{\"meetingTypeId\":\""
+                + meetingType.get("id").asText()
+                + "\",\"startsAt\":\"2026-11-16T09:00:00Z\","
+                + "\"guestName\":\"Иван\",\"guestEmail\":\"ivan@example.com\","
+                + "\"note\":\"  Обсудить план проекта  \"}");
+
+    assertThat(response.statusCode()).isEqualTo(201);
+    var body = objectMapper.readTree(response.body());
+    assertThat(body.get("note").asText()).isEqualTo("Обсудить план проекта");
+
+    var conflict =
+        postBooking(
+            "{\"meetingTypeId\":\""
+                + meetingType.get("id").asText()
+                + "\",\"startsAt\":\"2026-11-16T09:00:00Z\","
+                + "\"guestName\":\"Другой гость\",\"guestEmail\":\"other@example.com\","
+                + "\"note\":\"Вторая заметка\"}");
+    assertThat(conflict.statusCode()).isEqualTo(409);
+    assertThat(objectMapper.readTree(conflict.body()).get("code").asText())
+        .isEqualTo("SLOT_UNAVAILABLE");
+
+    var monday = bookingDay(meetingType, 3);
+    assertThat(monday.get("busyIntervals")).hasSize(1);
+    assertThat(monday.get("busyIntervals").get(0).has("note")).isFalse();
+  }
+
+  @Test
+  void treatsMissingAndWhitespaceOnlyNoteAsAbsent() throws Exception {
+    var meetingType = createMeetingType("Без заметки", 45);
+    putAvailability(
+        "{\"MONDAY\":[{\"start\":\"09:00\",\"end\":\"12:00\"}],"
+            + "\"TUESDAY\":[],\"WEDNESDAY\":[],\"THURSDAY\":[],\"FRIDAY\":[],"
+            + "\"SATURDAY\":[],\"SUNDAY\":[]}");
+
+    var withoutNote = postBooking(bookingRequest(meetingType, "2026-11-16T09:00:00Z", "Гость"));
+    var whitespaceOnly =
+        postBooking(
+            "{\"meetingTypeId\":\""
+                + meetingType.get("id").asText()
+                + "\",\"startsAt\":\"2026-11-16T09:45:00Z\","
+                + "\"guestName\":\"Гость\",\"guestEmail\":\"guest@example.com\","
+                + "\"note\":\"   \"}");
+
+    assertThat(withoutNote.statusCode()).isEqualTo(201);
+    assertThat(objectMapper.readTree(withoutNote.body()).has("note")).isFalse();
+    assertThat(whitespaceOnly.statusCode()).isEqualTo(201);
+    assertThat(objectMapper.readTree(whitespaceOnly.body()).has("note")).isFalse();
+  }
+
+  @Test
+  void acceptsNoteOfExactlyFiveHundredCharacters() throws Exception {
+    var meetingType = createMeetingType("Граничная заметка", 45);
+    putAvailability(
+        "{\"MONDAY\":[{\"start\":\"09:00\",\"end\":\"12:00\"}],"
+            + "\"TUESDAY\":[],\"WEDNESDAY\":[],\"THURSDAY\":[],\"FRIDAY\":[],"
+            + "\"SATURDAY\":[],\"SUNDAY\":[]}");
+    var note = "я".repeat(500);
+
+    var response =
+        postBooking(
+            "{\"meetingTypeId\":\""
+                + meetingType.get("id").asText()
+                + "\",\"startsAt\":\"2026-11-16T09:00:00Z\","
+                + "\"guestName\":\"Иван\",\"guestEmail\":\"ivan@example.com\","
+                + "\"note\":\""
+                + note
+                + "\"}");
+
+    assertThat(response.statusCode()).isEqualTo(201);
+    assertThat(objectMapper.readTree(response.body()).get("note").asText()).isEqualTo(note);
+  }
+
+  @Test
   void blocksOverlapsAcrossTypesButAllowsAdjacentMeetingsAndHidesGuestData() throws Exception {
     var firstType = createMeetingType("Первая встреча", 45);
     var secondType = createMeetingType("Вторая встреча", 30);
@@ -399,7 +481,12 @@ class BookingApiTests extends CalendarApiTestBase {
             "guestEmail"),
         Arguments.of(
             "{\"meetingTypeId\":\"type\",\"startsAt\":\"2026-11-16T09:00:00Z\",\"guestName\":\"Иван\",\"guestEmail\":\"ivan petrov@example.com\"}",
-            "guestEmail"));
+            "guestEmail"),
+        Arguments.of(
+            "{\"meetingTypeId\":\"type\",\"startsAt\":\"2026-11-16T09:00:00Z\",\"guestName\":\"Иван\",\"guestEmail\":\"ivan@example.com\",\"note\":\""
+                + "а".repeat(501)
+                + "\"}",
+            "note"));
   }
 
   @ParameterizedTest
@@ -409,7 +496,8 @@ class BookingApiTests extends CalendarApiTestBase {
         "{\"meetingTypeId\":42,\"startsAt\":\"2026-11-16T09:00:00Z\",\"guestName\":\"Иван\",\"guestEmail\":\"ivan@example.com\"}",
         "{\"meetingTypeId\":\"type\",\"startsAt\":42,\"guestName\":\"Иван\",\"guestEmail\":\"ivan@example.com\"}",
         "{\"meetingTypeId\":\"type\",\"startsAt\":\"2026-11-16T09:00:00Z\",\"guestName\":42,\"guestEmail\":\"ivan@example.com\"}",
-        "{\"meetingTypeId\":\"type\",\"startsAt\":\"2026-11-16T09:00:00Z\",\"guestName\":\"Иван\",\"guestEmail\":42}"
+        "{\"meetingTypeId\":\"type\",\"startsAt\":\"2026-11-16T09:00:00Z\",\"guestName\":\"Иван\",\"guestEmail\":42}",
+        "{\"meetingTypeId\":\"type\",\"startsAt\":\"2026-11-16T09:00:00Z\",\"guestName\":\"Иван\",\"guestEmail\":\"ivan@example.com\",\"note\":42}"
       })
   void rejectsMalformedBookingWithProblemDetails(String requestBody) throws Exception {
     var response = postBooking(requestBody);

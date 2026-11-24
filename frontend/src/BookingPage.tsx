@@ -35,6 +35,12 @@ function formatDate(date: string) {
 
 type BookingStep = 'type' | 'slot' | 'details' | 'confirmation'
 
+type GuestFieldErrors = {
+  guestName?: string
+  guestEmail?: string
+  note?: string
+}
+
 const bookingSteps: Array<{ id: BookingStep; label: string }> = [
   { id: 'type', label: 'Тип встречи' },
   { id: 'slot', label: 'Дата и время' },
@@ -108,13 +114,11 @@ function BookingPage() {
   const [selectedSlot, setSelectedSlot] = useState<BookingSlot | null>(null)
   const [guestName, setGuestName] = useState('')
   const [guestEmail, setGuestEmail] = useState('')
+  const [note, setNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [bookingError, setBookingError] = useState<string | null>(null)
   const [conflictMessage, setConflictMessage] = useState<string | null>(null)
-  const [fieldErrors, setFieldErrors] = useState<{
-    guestName?: string
-    guestEmail?: string
-  }>({})
+  const [fieldErrors, setFieldErrors] = useState<GuestFieldErrors>({})
   const [bookedMeeting, setBookedMeeting] = useState<Meeting | null>(null)
   const [bookedDate, setBookedDate] = useState<string | null>(null)
 
@@ -185,6 +189,7 @@ function BookingPage() {
     setSelectedSlot(null)
     setGuestName('')
     setGuestEmail('')
+    setNote('')
     setFieldErrors({})
     setBookingError(null)
     setConflictMessage(null)
@@ -221,7 +226,8 @@ function BookingPage() {
     if (!selectedType || !selectedDate || !selectedSlot || submitting) return
     const trimmedName = guestName.trim()
     const trimmedEmail = guestEmail.trim()
-    const errors: { guestName?: string; guestEmail?: string } = {}
+    const trimmedNote = note.trim()
+    const errors: GuestFieldErrors = {}
     if (!trimmedName) {
       errors.guestName = 'Имя обязательно'
     } else if (trimmedName.length > 100) {
@@ -242,6 +248,9 @@ function BookingPage() {
         errors.guestEmail = 'Укажите корректный email'
       }
     }
+    if (trimmedNote.length > 500) {
+      errors.note = 'Заметка должна содержать не более 500 символов'
+    }
     setFieldErrors(errors)
     setBookingError(null)
     if (Object.keys(errors).length > 0) return
@@ -254,6 +263,7 @@ function BookingPage() {
           startsAt: selectedSlot.startsAt,
           guestName: trimmedName,
           guestEmail: trimmedEmail,
+          ...(trimmedNote ? { note: trimmedNote } : {}),
         },
       })
       if (response.ok && data) {
@@ -261,10 +271,11 @@ function BookingPage() {
         setBookedMeeting(data)
         setBookedDate(selectedDate)
       } else if (response.status === 400 && error?.code === 'VALIDATION_ERROR') {
-        const serverErrors: { guestName?: string; guestEmail?: string } = {}
+        const serverErrors: GuestFieldErrors = {}
         for (const fieldError of error.errors ?? []) {
           if (fieldError.path === 'guestName') serverErrors.guestName = fieldError.message
           if (fieldError.path === 'guestEmail') serverErrors.guestEmail = fieldError.message
+          if (fieldError.path === 'note') serverErrors.note = fieldError.message
         }
         setFieldErrors(serverErrors)
         if (Object.keys(serverErrors).length === 0) {
@@ -344,6 +355,7 @@ function BookingPage() {
           endsAt={bookedMeeting.endsAt}
           timeZone={timeZone}
         />
+        {bookedMeeting.note && <p>Заметка: {bookedMeeting.note}</p>}
         <button type="button" onClick={startAnotherBooking}>
           Забронировать ещё одну встречу
         </button>
@@ -525,6 +537,19 @@ function BookingPage() {
             {fieldErrors.guestEmail && (
               <p className="field-error" id="guest-email-error">
                 {fieldErrors.guestEmail}
+              </p>
+            )}
+            <label htmlFor="guest-note">Заметка</label>
+            <textarea
+              id="guest-note"
+              value={note}
+              aria-invalid={Boolean(fieldErrors.note)}
+              aria-describedby={fieldErrors.note ? 'guest-note-error' : undefined}
+              onChange={(event) => setNote(event.target.value)}
+            />
+            {fieldErrors.note && (
+              <p className="field-error" id="guest-note-error">
+                {fieldErrors.note}
               </p>
             )}
             <button type="submit" disabled={submitting}>

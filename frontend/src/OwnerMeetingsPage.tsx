@@ -109,6 +109,7 @@ function OwnerMeetingsPage() {
                 </p>
                 <p>{meeting.guestName}</p>
                 <a href={`mailto:${meeting.guestEmail}`}>{meeting.guestEmail}</a>
+                {meeting.note && <p>Заметка: {meeting.note}</p>}
                 {!meeting.inProgress && (
                   <button type="button" onClick={() => setMeetingToCancel(meeting)}>
                     Отменить встречу
