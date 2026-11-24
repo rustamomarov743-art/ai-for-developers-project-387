@@ -6,6 +6,12 @@ tmp_dir="$(mktemp -d "$PWD/.budget-test.XXXXXX")"
 trap 'rm -rf "$tmp_dir"' EXIT
 mkdir -p "$tmp_dir/bin"
 
+workflow_path="$script_dir/../workflows/opencode.yml"
+if ! grep -Eq '^run-name: "opencode .+#\$\{\{[^}]+\}\}"$' "$workflow_path"; then
+  echo "PR number in run-name must be inside a quoted YAML scalar" >&2
+  exit 1
+fi
+
 cat > "$tmp_dir/bin/gh" <<'EOF'
 #!/usr/bin/env bash
 if [[ "${MOCK_MODE:-count}" == "api_error" ]]; then
