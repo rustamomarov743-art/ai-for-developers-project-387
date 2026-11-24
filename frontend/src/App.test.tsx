@@ -189,7 +189,7 @@ async function openBookingForm(user: ReturnType<typeof userEvent.setup>) {
   await user.click(await screen.findByRole('button', { name: slotTime }))
 }
 
-function createdMeeting(meetingType: MeetingType): Meeting {
+function createdMeeting(meetingType: MeetingType, note?: string): Meeting {
   return {
     id: 'meeting-1',
     meetingTypeId: meetingType.id,
@@ -200,6 +200,7 @@ function createdMeeting(meetingType: MeetingType): Meeting {
     createdAt: '2026-11-13T09:00:00Z',
     status: 'SCHEDULED',
     meetingType,
+    ...(note === undefined ? {} : { note }),
   }
 }
 
@@ -209,6 +210,7 @@ function ownerMeeting(
   endsAt: string,
   name = 'Консультация',
   inProgress = false,
+  note?: string,
 ): OwnerMeeting {
   const meetingType = bookingType(`type-${id}`, name)
   return {
@@ -223,6 +225,7 @@ function ownerMeeting(
     meetingType,
     durationMinutes: meetingType.durationMinutes,
     inProgress,
+    ...(note === undefined ? {} : { note }),
   }
 }
 
@@ -371,6 +374,32 @@ describe('Встречи владельца', () => {
     expect(
       within(firstGroup!.parentElement!).getAllByRole('heading', { level: 2 }),
     ).toHaveLength(2)
+  })
+
+  it('показывает заметку гостя в деталях встречи и не добавляет блок без неё', async () => {
+    listOwnerMeetingsMock.mockResolvedValue({
+      data: [
+        ownerMeeting(
+          'noted',
+          '2026-11-16T10:00:00Z',
+          '2026-11-16T10:45:00Z',
+          'Консультация',
+          false,
+          'Тема звонка',
+        ),
+        ownerMeeting('plain', '2026-11-16T11:00:00Z', '2026-11-16T11:45:00Z'),
+      ],
+      request: ownerMeetingsRequest,
+      response: new Response(null, { status: 200 }),
+    })
+    renderApp('/owner')
+
+    const notedCard = (await screen.findByText('Гость noted')).closest('article')
+    expect(notedCard).not.toBeNull()
+    expect(notedCard!).toHaveTextContent('Тема звонка')
+    const plainCard = screen.getByText('Гость plain').closest('article')
+    expect(plainCard).not.toBeNull()
+    expect(plainCard!).not.toHaveTextContent('Заметка')
   })
 
   it('открывает диалог только для будущей встречи и закрывает его без изменений', async () => {
@@ -1699,6 +1728,96 @@ describe('Гостевое бронирование', () => {
     ).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'На главную' })).toBeInTheDocument()
     expect(screen.queryByLabelText('Имя')).not.toBeInTheDocument()
+  })
+
+  it('отправляет заметку с trim и показывает её в подтверждении', async () => {
+    const user = userEvent.setup()
+    const meetingType = mockBookingSelection()
+    createBookingMock.mockResolvedValue({
+      data: createdMeeting(meetingType, 'Обсудить план проекта'),
+      request: createBookingRequest,
+      response: new Response(null, { status: 201 }),
+    })
+    renderApp('/book')
+    await openBookingForm(user)
+    await user.type(screen.getByLabelText('Имя'), 'Иван Петров')
+    await user.type(screen.getByLabelText('Email'), 'ivan@example.com')
+    await user.type(screen.getByLabelText('Заметка'), '  Обсудить план проекта  ')
+    await user.click(screen.getByRole('button', { name: 'Забронировать' }))
+
+    expect(createBookingMock).toHaveBeenCalledWith({
+      body: {
+        meetingTypeId: 'type-1',
+        startsAt: '2026-11-15T10:00:00Z',
+        guestName: 'Иван Петров',
+        guestEmail: 'ivan@example.com',
+        note: 'Обсудить план проекта',
+      },
+    })
+    expect(await screen.findByText('Встреча забронирована')).toBeInTheDocument()
+    expect(screen.getByText(/Обсудить план проекта/)).toBeInTheDocument()
+  })
+
+  it('бронирует без заметки и не показывает лишний блок в подтверждении', async () => {
+    const user = userEvent.setup()
+    const meetingType = mockBookingSelection()
+    createBookingMock.mockResolvedValue({
+      data: createdMeeting(meetingType),
+      request: createBookingRequest,
+      response: new Response(null, { status: 201 }),
+    })
+    renderApp('/book')
+    await openBookingForm(user)
+    await user.type(screen.getByLabelText('Имя'), 'Иван Петров')
+    await user.type(screen.getByLabelText('Email'), 'ivan@example.com')
+    await user.click(screen.getByRole('button', { name: 'Забронировать' }))
+
+    expect(createBookingMock).toHaveBeenCalledWith({
+      body: {
+        meetingTypeId: 'type-1',
+        startsAt: '2026-11-15T10:00:00Z',
+        guestName: 'Иван Петров',
+        guestEmail: 'ivan@example.com',
+      },
+    })
+    expect(await screen.findByText('Встреча забронирована')).toBeInTheDocument()
+    expect(screen.queryByText(/Заметка:/)).not.toBeInTheDocument()
+  })
+
+  it('показывает серверную ошибку заметки у поля ввода', async () => {
+    const user = userEvent.setup()
+    mockBookingSelection()
+    createBookingMock.mockResolvedValue({
+      data: undefined,
+      error: {
+        type: 'about:blank',
+        title: 'Bad Request',
+        status: 400,
+        detail: 'Проверьте значения полей',
+        instance: '/api/booking/bookings',
+        code: 'VALIDATION_ERROR',
+        errors: [
+          {
+            path: 'note',
+            message: 'Заметка должна содержать не более 500 символов',
+          },
+        ],
+      },
+      request: createBookingRequest,
+      response: new Response(null, { status: 400 }),
+    })
+    renderApp('/book')
+    await openBookingForm(user)
+    await user.type(screen.getByLabelText('Имя'), 'Иван Петров')
+    await user.type(screen.getByLabelText('Email'), 'ivan@example.com')
+    await user.type(screen.getByLabelText('Заметка'), 'Черновик заметки')
+    await user.click(screen.getByRole('button', { name: 'Забронировать' }))
+
+    expect(
+      await screen.findByText('Заметка должна содержать не более 500 символов'),
+    ).toBeInTheDocument()
+    expect(screen.getByLabelText('Заметка')).toHaveValue('Черновик заметки')
+    expect(screen.getByRole('region', { name: 'Сводка встречи' })).toBeInTheDocument()
   })
 
   it('блокирует повторную отправку и сохраняет форму для повтора после сбоя', async () => {

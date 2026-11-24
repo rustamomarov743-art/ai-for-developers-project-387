@@ -56,6 +56,23 @@ class OwnerMeetingApiTests extends CalendarApiTestBase {
     assertThat(objectMapper.readTree(getOwnerMeetings().body())).isEmpty();
   }
 
+  @Test
+  void returnsTrimmedGuestNoteInMeetingDetailsAndOmitsItWhenAbsent() throws Exception {
+    var meetingType = createMeetingType("Консультация", 45);
+    putAvailability();
+    createBookingWithNote(
+        meetingType, "2026-11-16T08:00:00Z", "Гость с заметкой", "  Тема звонка  ");
+    createBooking(meetingType, "2026-11-16T09:00:00Z", "Гость без заметки");
+
+    var body = objectMapper.readTree(getOwnerMeetings().body());
+
+    assertThat(body).hasSize(2);
+    assertThat(body.get(0).get("guestName").asText()).isEqualTo("Гость с заметкой");
+    assertThat(body.get(0).get("note").asText()).isEqualTo("Тема звонка");
+    assertThat(body.get(1).get("guestName").asText()).isEqualTo("Гость без заметки");
+    assertThat(body.get(1).has("note")).isFalse();
+  }
+
   private JsonNode createMeetingType(String name, int durationMinutes) throws Exception {
     var response =
         send(
@@ -95,6 +112,24 @@ class OwnerMeetingApiTests extends CalendarApiTestBase {
                 + "\",\"guestName\":\""
                 + guestName
                 + "\",\"guestEmail\":\"guest@example.com\"}");
+    assertThat(response.statusCode()).isEqualTo(201);
+  }
+
+  private void createBookingWithNote(
+      JsonNode meetingType, String startsAt, String guestName, String note) throws Exception {
+    var response =
+        send(
+            "/api/booking/bookings",
+            "POST",
+            "{\"meetingTypeId\":\""
+                + meetingType.get("id").asText()
+                + "\",\"startsAt\":\""
+                + startsAt
+                + "\",\"guestName\":\""
+                + guestName
+                + "\",\"guestEmail\":\"guest@example.com\",\"note\":\""
+                + note
+                + "\"}");
     assertThat(response.statusCode()).isEqualTo(201);
   }
 
