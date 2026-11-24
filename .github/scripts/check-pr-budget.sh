@@ -20,6 +20,19 @@ runs="$(
     --jq ".workflow_runs[] | select(.display_title == \"$run_title\") | [.id, .run_attempt] | @tsv"
 )"
 
+legacy_run_ids="$(
+  gh api --paginate "repos/{owner}/{repo}/issues/$PR_NUMBER/comments?per_page=100" \
+    --jq '.[] | select(.user.login == "opencode-agent[bot]" or .user.login == "github-actions[bot]") | .body | capture("\\[github run\\]\\([^)]*/actions/runs/(?<id>[0-9]+)\\)")? | .id // empty'
+)"
+legacy_runs="$(
+  while read -r legacy_run_id; do
+    [[ -n "$legacy_run_id" ]] || continue
+    gh api "repos/{owner}/{repo}/actions/runs/$legacy_run_id" \
+      --jq 'select(.name == "opencode") | [.id, .run_attempt] | @tsv'
+  done <<< "$legacy_run_ids"
+)"
+runs="$(printf '%s\n%s\n' "$runs" "$legacy_runs" | sort -u)"
+
 while read -r run_id run_attempts; do
   [[ -n "$run_id" ]] || continue
   for ((attempt = 1; attempt <= run_attempts; attempt++)); do

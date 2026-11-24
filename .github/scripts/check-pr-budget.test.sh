@@ -20,9 +20,14 @@ if [[ "${MOCK_MODE:-count}" == "api_error" ]]; then
 fi
 
 case "$*" in
+  *"issues/42/comments"*)
+    if [[ "${MOCK_MODE:-count}" == "legacy" ]]; then printf '3\n'; fi
+    ;;
   *"actions/workflows/opencode.yml/runs"*) printf '1\t2\n2\t1\n999\t1\n' ;;
   *"actions/runs/1/attempts/1/jobs"*|*"actions/runs/1/attempts/2/jobs"*|*"actions/runs/2/attempts/1/jobs"*) printf '1\n' ;;
+  *"actions/runs/3/attempts/1/jobs"*) printf '1\n' ;;
   *"actions/runs/999/attempts/1/jobs"*) printf '0\n' ;;
+  *"actions/runs/3"*) printf '3\t1\n' ;;
   *) exit 1 ;;
 esac
 EOF
@@ -38,6 +43,12 @@ bash "$script_dir/check-pr-budget.sh"
 grep -q '^count=3$' "$GITHUB_OUTPUT"
 grep -q '^allowed=false$' "$GITHUB_OUTPUT"
 grep -q '^reason=limit_exhausted$' "$GITHUB_OUTPUT"
+
+: > "$GITHUB_OUTPUT"
+export MOCK_MODE=legacy
+bash "$script_dir/check-pr-budget.sh"
+grep -q '^count=4$' "$GITHUB_OUTPUT"
+grep -q '^allowed=false$' "$GITHUB_OUTPUT"
 
 : > "$GITHUB_OUTPUT"
 export MOCK_MODE=api_error
