@@ -1,5 +1,6 @@
 package com.example.backend;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import java.time.Instant;
 
 record OwnerMeeting(
@@ -13,4 +14,5 @@ record OwnerMeeting(
     MeetingStatus status,
     MeetingType meetingType,
     int durationMinutes,
-    boolean inProgress) {}
+    boolean inProgress,
+    @JsonInclude(JsonInclude.Include.NON_NULL) String note) {}

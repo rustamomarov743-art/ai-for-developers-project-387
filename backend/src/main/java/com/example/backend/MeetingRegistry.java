@@ -51,7 +51,8 @@ class MeetingRegistry {
                 meeting.status(),
                 meeting.meetingType(),
                 meeting.meetingType().durationMinutes(),
-                !meeting.startsAt().isAfter(now)))
+                !meeting.startsAt().isAfter(now),
+                meeting.note()))
         .toList();
   }
 

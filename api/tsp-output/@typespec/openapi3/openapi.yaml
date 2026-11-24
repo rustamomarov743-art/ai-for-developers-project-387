@@ -546,6 +546,9 @@ components:
           format: int32
         inProgress:
           type: boolean
+        note:
+          type: string
+          maxLength: 500
     ProblemDetails:
       type: object
       required:

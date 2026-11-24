@@ -102,6 +102,7 @@ export type OwnerMeeting = {
     meetingType: MeetingType;
     durationMinutes: number;
     inProgress: boolean;
+    note?: string;
 };
 
 export type ProblemDetails = {

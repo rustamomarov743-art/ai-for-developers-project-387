@@ -62,7 +62,7 @@ class OwnerMeetingApiTests extends CalendarApiTestBase {
     putAvailability();
     createBookingWithNote(
         meetingType, "2026-11-16T08:00:00Z", "Гость с заметкой", "  Тема звонка  ");
-    createBooking(meetingType, "2026-11-16T09:00:00Z", "Гость без заметки");
+    createBooking(meetingType, "2026-11-16T08:45:00Z", "Гость без заметки");
 
     var body = objectMapper.readTree(getOwnerMeetings().body());
 

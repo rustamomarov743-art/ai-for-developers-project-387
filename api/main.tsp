@@ -216,6 +216,9 @@ model OwnerMeeting {
   meetingType: MeetingType;
   durationMinutes: int32;
   inProgress: boolean;
+
+  @maxLength(500)
+  note?: string;
 }
 
 @route("/api/owner/meetings")
